@@ -14,12 +14,16 @@ def read_yaml(config):
     return output
 
 
-def write_analysis_report(url, top_reviews, ratings_summary):
+def write_analysis_report(url, prop, top_reviews, ratings_summary):
     # Writing to text file
     with open('./Results/analysis_report.txt', 'w', encoding='utf-8') as f:
         f.write('------------------------------Analysis of Shopee Reviews------------------------------\n')
         f.write('\n')
-        f.write('Product scraped: ' + url + '\n')
+        f.write('Product analysed: ' + url + '\n')
+        f.write('\n')
+        f.write('Ratings proportion:\n')
+        for i in range(1, 6):
+            f.write('There are ' + str(prop[i][0]) + ' reviews (' + f'{prop[i][1]:.2f}' + '%) with rating ' + str(i) + '\n')
         f.write('\n')
         f.write('Top reviews are:\n')
         for i in top_reviews:

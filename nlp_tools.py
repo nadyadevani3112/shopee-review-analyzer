@@ -3,21 +3,10 @@ import emoji
 import string
 import numpy as np
 import pandas as pd
-import networkx as nx
 import sklearn.cluster as cluster
 from numpy import linalg as LA
-from nltk import pos_tag
-from nltk.corpus import wordnet
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 from nltk.tokenize import sent_tokenize
-from nltk.stem import WordNetLemmatizer
-from nltk.cluster.util import cosine_distance
-from sklearn.decomposition import NMF
-from sklearn.pipeline import make_pipeline
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
 from sentence_transformers import SentenceTransformer
 
 
@@ -75,7 +64,7 @@ def get_key_phrases(reviews, num_clusters=5):
                                                                                 .isin(clusters[k][0])]
                 enc_clust = np.array(clust['encoding'].to_list())
                 enc_clust_normalized = np.array(list(map(lambda x: np.array(x) / LA.norm(x, 2) 
-                                                         if LA.norm(x, 2) !=0 else np.array(x), enc_clust)))
+                                                         if LA.norm(x, 2) != 0 else np.array(x), enc_clust)))
                 similarities_clust = enc_clust_normalized.dot(enc_clust_normalized.T)
                 sim_total_scores = np.sum(similarities_clust, axis=1)
                 scores_clust = dict(list(enumerate(sim_total_scores)))
@@ -129,26 +118,6 @@ def strip_conj(x):
     return x
 
 
-def tokenize_reviews(reviews):
-    sentences = []
-    for s in reviews:
-        sentences.append(sent_tokenize(s))
-    
-    sentences = [y for x in sentences for y in x] # Flatten list
-    return sentences
-
-
-def process_glove_vect(glove_vect):
-    word_embeddings = {}
-    for line in glove_vect:
-        values = line.split()
-        word = values[0]
-        coefs = np.asarray(values[1:], dtype='float32')
-        word_embeddings[word] = coefs
-        
-    return word_embeddings
-
-
 def make_lowercase(text_list):
     result = [s.lower() for s in text_list]
     return result
@@ -157,32 +126,22 @@ def make_lowercase(text_list):
 def remove_stopwords(sen):
     stop_words = stopwords.words('english')
     sen_new = " ".join([i for i in sen if i not in stop_words])
-    
     return sen_new
 
 
-def create_sentence_vectors(sentences, word_embeddings):
-    sentence_vectors = []
-    for i in sentences:
-        if len(i) != 0:
-            v = sum([word_embeddings.get(w, np.zeros((100,))) for w in i.split()]) / (len(i.split())+0.001)
-        else:
-            v = np.zeros((100,))
-        sentence_vectors.append(v)
-        
-    return sentence_vectors
+def clean_text(text):
+    # Remove punctuations, numbers, and special characters
+    text = re.sub(r"[^a-zA-Z]", ' ', text)
+    return text
 
 
-def create_similarity_matrix(sentences, sentence_vectors):
-    sim_mat = np.zeros([len(sentences), len(sentences)])
+def tokenize_reviews(reviews):
+    sentences = []
+    for s in reviews:
+        sentences.append(sent_tokenize(s))
     
-    for i in range(len(sentences)):
-        for j in range(len(sentences)):
-            if i != j:
-                sim_mat[i][j] = cosine_similarity(sentence_vectors[i].reshape(1,768), 
-                                                  sentence_vectors[j].reshape(1,768))[0,0]
-    
-    return sim_mat
+    sentences = [y for x in sentences for y in x] # Flatten list
+    return sentences
 
 
 def get_top_reviews(sentences, top_n=10):
@@ -203,7 +162,7 @@ def get_top_reviews(sentences, top_n=10):
     
     # Create similarity matrix
     enc_clust_normalized = np.array(list(map(lambda x: np.array(x) / LA.norm(x, 2) 
-                                             if LA.norm(x, 2) !=0 else np.array(x), sentence_vectors)))
+                                             if LA.norm(x, 2) != 0 else np.array(x), sentence_vectors)))
     similarities_clust = enc_clust_normalized.dot(enc_clust_normalized.T)
     sim_total_scores = np.sum(similarities_clust, axis=1)
     scores = dict(list(enumerate(sim_total_scores)))
@@ -219,206 +178,16 @@ def get_top_reviews(sentences, top_n=10):
     return top_reviews
 
 
-def get_top_words(model, feature_names, top_n_words):
-    top_words = []
-    for topic_idx, topic in enumerate(model.components_):
-        message = 'Topic #%d: ' % topic_idx
-        message += ', '.join([feature_names[i]
-                             for i in topic.argsort()[:-top_n_words-1:-1]])
-        top_words.append(message)
-
-    return top_words
-
-
-def topic_extraction_nmf(df, rating, num_topics=3, top_n_words=5):
-    stop_words = stopwords.words('english')
+def get_ratings_proportion(reviews):
+    counts = reviews['Ratings'].value_counts()
+    total = len(reviews)
     
-    # Vectorize bigrams and trigrams
-    tfidf_vectorizer = TfidfVectorizer(stop_words=stop_words, ngram_range=(2,3))
-
-    # NMF
-    nmf = NMF(n_components=num_topics)
-    pipe = make_pipeline(tfidf_vectorizer, nmf)
-    pipe.fit(df[df['Ratings']==rating]['Reviews'])
+    results = {}
+    for i in range(1, 6):
+        try:
+            count = counts[i]
+            results[i] = (count, (count/total)*100)
+        except:
+            results[i] = (0, 0)
     
-    # Print top words representing each topic
-    top_words = get_top_words(nmf, tfidf_vectorizer.get_feature_names(), 
-                              top_n_words=top_n_words)
-    return top_words
-
-
-def topic_extraction_lda(df, rating, num_topics=3, top_n_words=5):
-    stop_words = stopwords.words('english')
-    
-    # Vectorize bigrams and trigrams
-    tfidf_vectorizer = TfidfVectorizer(stop_words=stop_words, ngram_range=(2,3))
-
-    # LDA
-    lda = LatentDirichletAllocation(n_components=num_topics)
-    pipe = make_pipeline(tfidf_vectorizer, lda)
-    pipe.fit(df[df['Ratings']==rating]['Reviews'])
-    
-    # Print top words representing each topic
-    top_words = get_top_words(lda, tfidf_vectorizer.get_feature_names(), 
-                              top_n_words=top_n_words)
-    return top_words
-
-
-def sentence_similarity(sent1, sent2, stopwords=None):
-    if stopwords is None:
-        stopwords = []
-
-    sent1 = [w.lower() for w in sent1]
-    sent2 = [w.lower() for w in sent2]
-
-    all_words = list(set(sent1+sent2))
-
-    vector1 = [0] * len(all_words)
-    vector2 = [0] * len(all_words)
-
-    # Build the vector for the first sentence
-    for w in sent1:
-        if w in stopwords:
-            continue
-        vector1[all_words.index(w)] += 1
-
-    # Build the vector for the second sentence
-    for w in sent2:
-        if w in stopwords:
-            continue
-        vector2[all_words.index(w)] += 1
-
-    return 1 - cosine_distance(vector1, vector2)
-
-
-def build_similarity_matrix(sentences, stop_words):
-    # Create an empty similarity matrix
-    similarity_matrix = np.zeros((len(sentences), len(sentences)))
-
-    for idx1 in range(len(sentences)):
-        for idx2 in range(len(sentences)):
-            if idx1 == idx2: # Ignore if both are the same sentence
-                continue 
-            similarity_matrix[idx1][idx2] = sentence_similarity(sentences[idx1], 
-                                                                sentences[idx2], 
-                                                                stop_words)
-
-    return similarity_matrix
-
-
-def summarize_text(sentences, top_n=5):
-    stop_words = stopwords.words('english')
-    summary_text = []
-    
-    # Step 1 - Generate similary matrix across sentences
-    sentence_similarity_matrix = build_similarity_matrix(sentences, stop_words)
-    
-    # Step 2 - Rank sentences in similarity matrix
-    sentence_similarity_graph = nx.from_numpy_array(sentence_similarity_matrix)
-    scores = nx.pagerank_numpy(sentence_similarity_graph)
-    
-    # Step 3 - Sort the rank and pick top sentences
-    ranked_sentence = sorted(((scores[i], s) for i, s in enumerate(sentences)), 
-                             reverse=True)
-    
-    for i in range(top_n):
-        summary_text.append(''.join(ranked_sentence[i][1]))
-
-    return summary_text
-
-
-def clean_text(text):
-    # Remove punctuations, numbers, and special characters
-    text = re.sub(r"[^a-zA-Z]", ' ', text)
-    return text
-
-
-def remove_punctuation(text):
-    for p in string.punctuation:
-        text = text.replace(p, '')
-    return text
-
-
-def decontract_text(text):
-    # Replace contractions with the full word  
-    text = re.sub(r"’", "'", text)
-    text = re.sub(r"won\'t", 'will not', text)
-    text = re.sub(r"can\'t", 'can not', text)
-    text = re.sub(r"it\'s", 'it is', text)
-    text = re.sub(r"don\'t", 'do not', text)
-    text = re.sub(r"'t", ' not', text)
-    text = re.sub(r"'re", ' are', text)
-    text = re.sub(r"'s", ' is', text)
-    text = re.sub(r"'d", ' would', text)
-    text = re.sub(r"'ll", ' will', text)
-    text = re.sub(r"'t", ' not', text)
-    text = re.sub(r"'ve", ' have', text)
-    text = re.sub(r"'m", ' am', text)
-    text = re.sub(r"'", '', text)
-    
-    return text
-
-
-def remove_emoji(text):
-    emoj = re.compile("["
-        u"\U0001F600-\U0001F64F"  # Emoticons
-        u"\U0001F300-\U0001F5FF"  # Symbols & pictographs
-        u"\U0001F680-\U0001F6FF"  # Transport & map symbols
-        u"\U0001F1E0-\U0001F1FF"  # Flags (iOS)
-        u"\U00002500-\U00002BEF"  # Chinese char
-        u"\U00002702-\U000027B0"
-        u"\U00002702-\U000027B0"
-        u"\U000024C2-\U0001F251"
-        u"\U0001f926-\U0001f937"
-        u"\U00010000-\U0010ffff"
-        u"\u2640-\u2642" 
-        u"\u2600-\u2B55"
-        u"\u200d"
-        u"\u23cf"
-        u"\u23e9"
-        u"\u231a"
-        u"\ufe0f"                 # Dingbats
-        u"\u3030""]+", re.UNICODE)
-    
-    return emoj.sub(r'', text)
-
-
-def pos_tagging(text):
-    text = word_tokenize(text)
-    tag_list = []
-    for i in text:
-        tag_list.append(pos_tag([i]))
-    
-    return tag_list
-
-
-def wordnet_tags(tag):
-    if tag.startswith('J'):
-        return wordnet.ADJ
-    if tag.startswith('V'):
-        return wordnet.VERB
-    if tag.startswith('N'):
-        return wordnet.NOUN
-    if tag.startswith('R'):
-        return wordnet.ADV
-    else:
-        return wordnet.NOUN
-
-
-def change_tag(text):
-    # Map tags from pos_tag to WordNet pos categories
-    new = []
-    for i in text:
-        new.append([i[0][0], wordnet_tags(i[0][1])])
-    
-    return new
-
-
-def lemmatize(text):
-    lemmatizer = WordNetLemmatizer()
-    new = []
-    for i in text:
-        new.append(lemmatizer.lemmatize(i[0]))
-    
-    new = ' '.join(new)
-    return new
+    return results
