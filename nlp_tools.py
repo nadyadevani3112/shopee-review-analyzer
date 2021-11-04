@@ -3,11 +3,13 @@ import emoji
 import string
 import numpy as np
 import pandas as pd
+import networkx as nx
 import sklearn.cluster as cluster
 from numpy import linalg as LA
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize
 from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 def get_key_phrases(reviews, num_clusters=5):
@@ -144,6 +146,18 @@ def tokenize_reviews(reviews):
     return sentences
 
 
+def create_similarity_matrix(sentences, sentence_vectors):
+    sim_mat = np.zeros([len(sentences), len(sentences)])
+    
+    for i in range(len(sentences)):
+        for j in range(len(sentences)):
+            if i != j:
+                sim_mat[i][j] = cosine_similarity(sentence_vectors[i].reshape(1,768), 
+                                                  sentence_vectors[j].reshape(1,768))[0,0]
+    
+    return sim_mat
+
+
 def get_top_reviews(sentences, top_n=10):
     print('Getting top reviews...')
     model = SentenceTransformer('paraphrase-distilroberta-base-v1')
@@ -161,11 +175,10 @@ def get_top_reviews(sentences, top_n=10):
     sentence_vectors = model.encode(clean_sentences)
     
     # Create similarity matrix
-    enc_clust_normalized = np.array(list(map(lambda x: np.array(x) / LA.norm(x, 2) 
-                                             if LA.norm(x, 2) != 0 else np.array(x), sentence_vectors)))
-    similarities_clust = enc_clust_normalized.dot(enc_clust_normalized.T)
-    sim_total_scores = np.sum(similarities_clust, axis=1)
-    scores = dict(list(enumerate(sim_total_scores)))
+    sim_mat = create_similarity_matrix(sentences, sentence_vectors)
+    
+    nx_graph = nx.from_numpy_array(sim_mat)
+    scores = nx.pagerank_numpy(nx_graph)
     
     ranked_sentences = sorted(((scores[i], s) for i, s in enumerate(sentences)), 
                               reverse=True)
@@ -173,7 +186,7 @@ def get_top_reviews(sentences, top_n=10):
     top_reviews = []
     for i in range(top_n):
         top_reviews.append(''.join(ranked_sentences[i][1]))
-    
+
     print('Done!')
     return top_reviews
 

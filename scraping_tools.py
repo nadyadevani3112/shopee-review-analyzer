@@ -45,6 +45,7 @@ def process_shopee_df(df):
     df = df[df['Reviews'] != '']
     df = df[df['Reviews'] != '******The review has been hidden due to inappropriate content.******']
     df = df.drop_duplicates()
+    print('Reviews without comments removed!')
     return df
 
 
@@ -72,7 +73,7 @@ def shopee_scraper(webdriver_path, url):
             for i in range(num_iterations):
                 # Scroll to the bottom of the page as Shopee uses lazy loading
                 # Scroll partially first to load reviews
-                browser.execute_script('window.scrollTo(0, 1620)')
+                browser.execute_script('window.scrollTo(0, 2160)')
                 time.sleep(0.1) # To ensure that reviews load
                 browser.execute_script('window.scrollTo(0, document.body.scrollHeight);')
                 
