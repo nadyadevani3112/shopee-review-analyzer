@@ -1,3 +1,6 @@
+## Contributors
+Leow Wei Sheng, Nadya Devani, Lee Jinghan, Kok Yi Ling
+
 # Shopee Review Analyzer
 This repository contains a tool that users can use to extract key insights from large numbers of Shopee product reviews without having to go through the hassle of reading each review. This tool is meant to be easy to use, and aims to help users answer questions such as "Why are people giving a rating of only 1 star?", or "What proportion of reviews are 5 star reviews?" – questions which most online shoppers would consider before buying a product.
 
@@ -16,5 +19,3 @@ This repository contains a tool that users can use to extract key insights from 
 ## Troubleshooting Guide
 - If the product webpage does not load fully, scroll through the page manually once and the page should load as usual thereafter
 
-## Contributors
-Wei Sheng, Nadya, Jinghan, Yi Ling
